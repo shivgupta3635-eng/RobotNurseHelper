@@ -1,0 +1,23 @@
+#!/bin/bash
+#Chih-Yuan Yang 2025/7/23
+#Build the Robot Nurse Helper project with CMake
+#I wrote this shell script file to call another shell script file.
+
+if [ $# == 1 ]; then
+    if [[ "$1" == "clean" ]]; then
+        rm -rf build
+    elif [[ "$1" == "Zenbo" || "$1" == "ZenboJrII" ]]; then
+        echo "Building for Zenbo or ZenboJrII"
+        cmake -S . -B build -DROBOT_MODEL=Zenbo
+    elif [[ "$1" == "Kebbi" ]]; then
+        echo "Building for Kebbi"
+        cmake -S . -B build -DROBOT_MODEL=Kebbi -DCMAKE_CXX_FLAGS="-Wno-psabi"
+    fi
+else
+    echo "Building for Kebbi"
+    rm -rf build
+    cmake -S . -B build -DROBOT_MODEL=Kebbi -DCMAKE_CXX_FLAGS="-Wno-psabi"
+fi
+# Cap parallelism to reduce risk of concurrent PCH generation issues
+cmake --build build -j 2
+

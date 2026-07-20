@@ -1,0 +1,37 @@
+.vscode/
+.cache/
+# Build directories
+build/
+build_tmp/
+**/build/
+**/build_tmp/
+
+# CMake
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+compile_commands.json
+
+# Object files
+*.o
+*.a
+*.so
+*.dll
+*.exe
+*.obj
+
+# Qt
+*.moc
+*.qrc
+*.rcc
+*.user
+
+# Logs
+*.log
+
+# VS Code
+.vscode/
+
+# Temporary
+*.tmp
