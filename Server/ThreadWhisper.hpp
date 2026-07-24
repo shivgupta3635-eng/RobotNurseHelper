@@ -78,6 +78,9 @@ public:
     VadIterator *pVad = NULL;             //This is the silero vad iterator.
 
     WhisperData getLatestResult();
+
+    static std::string CleanAndFilterNoiseText(const std::string& input);
+    static bool IsPureNoiseOrHallucination(const std::string& input);
 protected:
     void run();
     whisper_context* ctx = nullptr;

@@ -309,6 +309,12 @@ void ThreadStateControl::run()
                         //debug
                         cout << "Patient's response: " << WhisperResult.sOutput << endl;
 
+                        if (msetting.bFilterHallucinatedNoiseText && ThreadWhisper::IsPureNoiseOrHallucination(WhisperResult.sOutput))
+                        {
+                            cout << "[ThreadStateControl] Discarding ambient noise/hallucination response: '" << WhisperResult.sOutput << "'" << endl;
+                            continue;
+                        }
+
                         // ---------------------------------------------------------
                         // Voice interruption (STOP keyword)
                         // ---------------------------------------------------------
@@ -533,8 +539,13 @@ string ThreadStateControl::GetPatientName(string input_sentence){
     string name = ollama::generate(ModelName, prompt, options);
 
     // 去除 LLM 可能誤加的空白或換行
-    name.erase(0, name.find_first_not_of(" \n\r\t"));
-    name.erase(name.find_last_not_of(" \n\r\t") + 1);
+    auto start_pos = name.find_first_not_of(" \n\r\t");
+    if (start_pos == string::npos) {
+        name.clear();
+    } else {
+        auto end_pos = name.find_last_not_of(" \n\r\t");
+        name = name.substr(start_pos, end_pos - start_pos + 1);
+    }
 
     cout << "Extracted patient name by LLM: " << name << endl;
     

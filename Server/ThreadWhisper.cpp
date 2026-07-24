@@ -5,6 +5,47 @@
 
 #include <algorithm>
 #include <cctype>
+#include <regex>
+
+std::string ThreadWhisper::CleanAndFilterNoiseText(const std::string& input)
+{
+    if (input.empty()) return "";
+
+    // Remove bracketed/parenthesized acoustic tokens e.g. [BLANK_AUDIO], [Music], (coughing)
+    std::regex bracket_regex("\\[[^\\]]*\\]|\\([^\\)]*\\)");
+    std::string cleaned = std::regex_replace(input, bracket_regex, "");
+
+    auto start = cleaned.find_first_not_of(" \n\r\t");
+    if (start == std::string::npos) return "";
+    auto end = cleaned.find_last_not_of(" \n\r\t");
+    return cleaned.substr(start, end - start + 1);
+}
+
+bool ThreadWhisper::IsPureNoiseOrHallucination(const std::string& input)
+{
+    std::string lower = input;
+    std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c){ return (char)std::tolower(c); });
+
+    auto start = lower.find_first_not_of(" \t\n\r.,!?");
+    if (start == std::string::npos) return true;
+    auto end = lower.find_last_not_of(" \t\n\r.,!?");
+    lower = lower.substr(start, end - start + 1);
+
+    if (lower.empty()) return true;
+
+    static const std::vector<std::string> noise_patterns = {
+        "thank you", "thank you for watching", "subtitles by", "amara.org",
+        "you", "bye", "subscribe", "mbc", "blank_audio", "music", "noise",
+        "coughing", "laughter", "cheering", "sigh", "snicker", "gasp",
+        "yeah", "oh", "um", "uh", "hmm"
+    };
+
+    for (const auto& pattern : noise_patterns) {
+        if (lower == pattern) return true;
+    }
+
+    return false;
+}
 
 
 ThreadWhisper::ThreadWhisper()
@@ -83,7 +124,7 @@ void ThreadWhisper::run()
 
     wparams.translate = false;
     wparams.language = strLanguage.c_str();        // "zh" for Chinese, "en" for English, "ar" for Arabic
-    wparams.no_speech_thold = 0.02f; //0.6f; // silence threshold for VAD //[MOHAMED]
+    wparams.no_speech_thold = 0.5f; // silence threshold for VAD to filter background noise
 
     while(b_WhileLoop)
     {
@@ -182,6 +223,15 @@ void ThreadWhisper::run()
                    strTemp += text;
                 }
                
+                // Noise text cleaning and hallucination detection
+                strTemp = CleanAndFilterNoiseText(strTemp);
+                if (IsPureNoiseOrHallucination(strTemp))
+                {
+                    std::cout << "[ThreadWhisper] Filtered ambient noise/hallucination: '" << strOperatorSentence << "'" << std::endl;
+                    strTemp = "";
+                    strOperatorSentence = "";
+                }
+
                 // ------------- BARGE-IN (voice interruption) keyword detection -------------
                 // During robot speaking, Whisper must NOT forward normal speech to LLM.
                 // It should only detect interruption keywords (Alexa-style barge-in).
@@ -223,9 +273,12 @@ void ThreadWhisper::run()
                 pcmf32.clear();
                 tempData.sOutput = strTemp;
                 tempData.tSTTComplete = chrono::system_clock::now();
-                mtx.lock();
-                mResult = tempData;
-                mtx.unlock();
+                if (!strTemp.empty())
+                {
+                    mtx.lock();
+                    mResult = tempData;
+                    mtx.unlock();
+                }
 
             }
 

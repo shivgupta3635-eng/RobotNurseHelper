@@ -35,14 +35,22 @@ std::string AnythingLLM::ask(std::string slug, std::string message) {
     
     if (res) {
         if (res->status == 200) {
-            auto res_json = nlohmann::json::parse(res->body);
-            return res_json["textResponse"];
+            try {
+                auto res_json = nlohmann::json::parse(res->body);
+                if (res_json.contains("textResponse") && !res_json["textResponse"].is_null()) {
+                    return res_json["textResponse"].get<std::string>();
+                }
+            } catch (const std::exception& e) {
+                std::cerr << "[AnythingLLM] JSON parse error: " << e.what() << std::endl;
+            }
         } else {
-            return "HTTP Error: " + std::to_string(res->status) + " - " + res->body;
+            std::cerr << "[AnythingLLM] HTTP Error " << res->status << " for workspace '" << slug << "': " << res->body << std::endl;
+            return "";
         }
     }
     
-    return "Connection Failed.";
+    std::cerr << "[AnythingLLM] Connection to AnythingLLM (127.0.0.1:3001) failed. Please check if AnythingLLM service is running." << std::endl;
+    return "";
 }
 
 void AnythingLLM::startNewPatient() {

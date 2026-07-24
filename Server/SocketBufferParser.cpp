@@ -61,29 +61,28 @@ void SocketBufferParser::add_data(char* data_, size_t length)
 
     size_t buffer_length_old = buffer_length;
 
-
     //copy data_ to buffer
     //whisper.cpp pauses the thread, as a result, the length may exceed the buffer size.
 
-    if( buffer_length + length > buffer_size)
+    // Dynamic buffer expansion if new chunk exceeds current buffer capacity
+    if (buffer_length + length > buffer_size)
     {
+        size_t new_buffer_size = std::max(buffer_size * 2, buffer_length + length + 2000000);
         if (dbg_enabled) {
-            dbg_drop_head++;
-            if (dbg_calls % 2000 == 0) {
-                std::cout << "[SocketBufferParser] Buffer overflow; dropping old data. buffer_length="
-                          << buffer_length << " new_chunk_len=" << length
-                          << " buffer_size=" << buffer_size << std::endl;
-            }
+            std::cout << "[SocketBufferParser] Dynamically expanding buffer from "
+                      << buffer_size << " to " << new_buffer_size << " bytes for chunk len=" << length << std::endl;
         }
-        cout << "Buffer size is not enough. Drop out the old data." << endl;
-        //2025/3/30, I need to handle here later
-        buffer_length = 0;
+        auto new_buffer = make_unique<char[]>(new_buffer_size);
+        if (buffer_length > 0)
+        {
+            copy(buffer.get(), buffer.get() + buffer_length, new_buffer.get());
+        }
+        buffer = std::move(new_buffer);
+        buffer_size = new_buffer_size;
     }
-    else
-    {
-        copy(data_, data_+length, buffer.get()+buffer_length);
-        buffer_length += length;
-    }
+
+    copy(data_, data_ + length, buffer.get() + buffer_length);
+    buffer_length += length;
 
 
     //find delimiter_tail in buffer
@@ -91,13 +90,17 @@ void SocketBufferParser::add_data(char* data_, size_t length)
     
     string buffer_section;      //the section of buffer to search for delimiter_tail
     int begin_pos = 0;
-    if(buffer_length_old >= delimiter_tail_length)
+    if(buffer_length_old >= (size_t)delimiter_tail_length && buffer_length_old <= buffer_length)
     {
         begin_pos = buffer_length_old - delimiter_tail_length;
-        buffer_section.assign(buffer.get() + buffer_length_old - delimiter_tail_length, length + delimiter_tail_length); 
+        size_t section_len = buffer_length - begin_pos;
+        buffer_section.assign(buffer.get() + begin_pos, section_len); 
     }
     else
+    {
+        begin_pos = 0;
         buffer_section.assign(buffer.get(), buffer_length); 
+    }
 
     //The incoming data may contain multiple DataFrames
     bool bloop_find = true;
@@ -118,45 +121,56 @@ void SocketBufferParser::add_data(char* data_, size_t length)
                           << std::endl;
             }
             //length1 means the length between two delimiter_tail, including the delimiter_tail.
-            int length1 = begin_pos + n + delimiter_tail.length();
+            size_t length1 = begin_pos + n + delimiter_tail.length();
 
-            //check the delimiter_head
-            string buffer_section_head(buffer.get(), delimiter_head.length());      
-            if( buffer_section_head != delimiter_head)        //This may fail, check reason.
+            if (length1 > buffer_length)
             {
+                cout << "Invalid length1 (" << length1 << " > " << buffer_length << "). Clearing buffer." << endl;
+                buffer_length = 0;
+                break;
+            }
 
-                // Drop this frame and move on (do not attempt to read length/proto payload).
-                cout << "Delimiter head is incorrect. Drop out this DataFrame" << endl;
-                cout << "Expected Delimiter_head: " << delimiter_head << " buffer_section_head: " << buffer_section_head << endl;
-                // Treat this as an invalid framed packet; skip parsing payload.
+            size_t head_len = delimiter_head.length();
+            size_t tail_len = delimiter_tail.length();
+
+            if (buffer_length < head_len || length1 < head_len + tail_len + sizeof(int))
+            {
+                cout << "Buffer frame too short for header/length specifier. Dropping frame." << endl;
             }
             else
             {
-
-
-                //check the DataFrame length
-                int DataFrame_length;
-                memcpy(&DataFrame_length, buffer.get() + delimiter_head.length(), sizeof(int));       //here is wrong, why?
-                int length2 = length1 - delimiter_head.length() - delimiter_tail.length();
-                if( DataFrame_length != length2 - sizeof(int))
+                //check the delimiter_head
+                string buffer_section_head(buffer.get(), head_len);      
+                if( buffer_section_head != delimiter_head)        //This may fail, check reason.
                 {
-                    cout << "DataFrame_length is incorrect. Drop out this DataFrame" << endl;
-                    cout << "length1: " <<  length1 << endl;
-                    cout << "length2: " <<  length2 << endl;
-                    cout << "DataFrame_length: " <<  DataFrame_length << endl;
-                    //On an emulator, there will no WiFi error. But on a real robot, there will be WiFi error.
-                    //I need to skip this frame.
+                    // Drop this frame and move on (do not attempt to read length/proto payload).
+                    cout << "Delimiter head is incorrect. Drop out this DataFrame" << endl;
+                    cout << "Expected Delimiter_head: " << delimiter_head << " buffer_section_head: " << buffer_section_head << endl;
                 }
                 else
                 {
-                    //copy buffer to queue
-                    DataFrame this_DataFrame;
-                    this_DataFrame.data = shared_ptr<char[]>(new char[DataFrame_length]);
-                    this_DataFrame.length = DataFrame_length;
-                    memcpy(this_DataFrame.data.get(), buffer.get()+delimiter_head.length()+sizeof(int), DataFrame_length);
-                    pDataFrames_queue->push(this_DataFrame);
-                    if( pNofitiedCondVar != nullptr )
-                        pNofitiedCondVar->notify_one();
+                    //check the DataFrame length
+                    int DataFrame_length = 0;
+                    memcpy(&DataFrame_length, buffer.get() + head_len, sizeof(int));
+                    int length2 = (int)length1 - (int)head_len - (int)tail_len;
+                    if( DataFrame_length <= 0 || DataFrame_length != length2 - (int)sizeof(int))
+                    {
+                        cout << "DataFrame_length is incorrect. Drop out this DataFrame" << endl;
+                        cout << "length1: " <<  length1 << endl;
+                        cout << "length2: " <<  length2 << endl;
+                        cout << "DataFrame_length: " <<  DataFrame_length << endl;
+                    }
+                    else
+                    {
+                        //copy buffer to queue
+                        DataFrame this_DataFrame;
+                        this_DataFrame.data = shared_ptr<char[]>(new char[DataFrame_length]);
+                        this_DataFrame.length = DataFrame_length;
+                        memcpy(this_DataFrame.data.get(), buffer.get()+head_len+sizeof(int), DataFrame_length);
+                        pDataFrames_queue->push(this_DataFrame);
+                        if( pNofitiedCondVar != nullptr )
+                            pNofitiedCondVar->notify_one();
+                    }
                 }
             }
  

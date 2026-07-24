@@ -10,6 +10,11 @@
 
 int main(int argc, char *argv[])
 {
+    // Suppress MediaPipe landmark_projection_calculator & GLOG warning logs
+    setenv("GLOG_minloglevel", "2", 1);
+    setenv("GLOG_stderrthreshold", "2", 1);
+    setenv("STDERR_THRESHOLD", "2", 1);
+
     QApplication app(argc, argv);
     QCoreApplication::setApplicationName("Robot Nurse Helper");
     QCoreApplication::setApplicationVersion("2026.07.01");

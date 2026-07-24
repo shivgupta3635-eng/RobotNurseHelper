@@ -38,6 +38,10 @@ struct Setting
     string YoloModelPath = "";
     bool bHideCursor = true;
     string Machine = "PC";                      //AGXOrin, PC
+    bool bEnableAudioNoiseFilter = true;
+    float fAudioNoiseThreshold = 0.005f;
+    float fWhisperNoSpeechThreshold = 0.5f;
+    bool bFilterHallucinatedNoiseText = true;
 };
 
 inline void from_json(const nlohmann::json& j, Setting& s) {
@@ -67,6 +71,10 @@ inline void from_json(const nlohmann::json& j, Setting& s) {
     s.YoloModelPath = j.value("YoloModelPath", s.YoloModelPath);
     s.bHideCursor = j.value("bHideCursor", s.bHideCursor);
     s.Machine = j.value("Machine", s.Machine);
+    s.bEnableAudioNoiseFilter = j.value("bEnableAudioNoiseFilter", s.bEnableAudioNoiseFilter);
+    s.fAudioNoiseThreshold = j.value("fAudioNoiseThreshold", s.fAudioNoiseThreshold);
+    s.fWhisperNoSpeechThreshold = j.value("fWhisperNoSpeechThreshold", s.fWhisperNoSpeechThreshold);
+    s.bFilterHallucinatedNoiseText = j.value("bFilterHallucinatedNoiseText", s.bFilterHallucinatedNoiseText);
 }
 
 #endif // SETTING_HPP

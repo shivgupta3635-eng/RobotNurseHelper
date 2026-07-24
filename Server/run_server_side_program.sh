@@ -59,10 +59,12 @@ if [[ "$Machine" = "AGXOrin" ]]; then
     if [ ! -z "$HDMI_SINK" ]; then
         pactl set-default-sink "$HDMI_SINK"
         echo "Successfully switched to HDMI Sink: $HDMI_SINK"
-    else
-        echo "Error: HDMI Sink not found after profile switch."
     fi
 fi
+
+# Suppress verbose MediaPipe GLOG warnings (landmark_projection_calculator etc.)
+export GLOG_minloglevel=2
+export GLOG_stderrthreshold=2
 
 echo "Starting RobotNurseHelper with Setting file: $Setting_file"
 build/RobotNurseHelper --SettingFile "$Setting_file" | tee "$FILENAME" # Log output to a file with timestamp

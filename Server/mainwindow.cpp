@@ -274,16 +274,22 @@ void MainWindow::newConnection_receive_image()
 
 void MainWindow::newConnection_send_command()
 {
-    std::cout << "newConnction() 8896" << std::endl;
     while (m_server_send_command->hasPendingConnections())
-        appendToSocketList2(m_server_send_command->nextPendingConnection());    //the nextPendingConnection() will retrieve a socket
+    {
+        QTcpSocket* socket = m_server_send_command->nextPendingConnection();
+        std::cout << "[Server] Kebbi connected to Command Port 8896 from: " << socket->peerAddress().toString().toStdString() << std::endl;
+        appendToSocketList2(socket);
+    }
 }
 
 void MainWindow::newConnection_receive_audio()
 {
-    std::cout << "newConnction() 8897" << std::endl;
     while (m_server_receive_audio->hasPendingConnections())
-        appendToSocketList3(m_server_receive_audio->nextPendingConnection());
+    {
+        QTcpSocket* socket = m_server_receive_audio->nextPendingConnection();
+        std::cout << "[Server] Kebbi connected to Audio Stream Port 8897 from: " << socket->peerAddress().toString().toStdString() << std::endl;
+        appendToSocketList3(socket);
+    }
 }
 
 void MainWindow::newConnection_receive_message()
@@ -295,7 +301,7 @@ void MainWindow::newConnection_receive_message()
         Handler_set.insert(handler);
         handler->socketBufferParser.pDataFrames_queue = &thread_receive_message.DataFrames_queue;
         handler->socketBufferParser.pNofitiedCondVar = &thread_receive_message.cond_var_receive_message;
-        qDebug() << "New connection 8898 from:" << socket->peerAddress().toString();
+        std::cout << "[Server] Kebbi connected to Message Port 8898 from: " << socket->peerAddress().toString().toStdString() << std::endl;
     }    
 }
 
@@ -314,6 +320,34 @@ void MainWindow::appendToSocketList3(QTcpSocket* socket)
     connect(socket, &QTcpSocket::readyRead, this, &MainWindow::readSocket3);
     connect(socket, &QTcpSocket::disconnected, this, &MainWindow::discardSocket3);
     connect(socket, &QAbstractSocket::errorOccurred, this, &MainWindow::displayError);
+}
+
+#include <cmath>
+
+static float ApplyBandPassAndCalculateRMS(const short* pShort, long long numSamples, std::vector<float>& outFloatSamples, bool enableFilter)
+{
+    float sumSquare = 0.0f;
+    static float prevIn = 0.0f;
+    static float prevOut = 0.0f;
+    const float alpha = 0.95f; // High-pass filter constant (~100Hz cutoff at 16kHz)
+
+    outFloatSamples.resize(numSamples);
+
+    for (long long i = 0; i < numSamples; ++i) {
+        float rawSample = (float)pShort[i] / 32768.0f;
+        float filtered = rawSample;
+
+        if (enableFilter) {
+            filtered = alpha * (prevOut + rawSample - prevIn);
+            prevIn = rawSample;
+            prevOut = filtered;
+        }
+
+        outFloatSamples[i] = filtered;
+        sumSquare += filtered * filtered;
+    }
+
+    return (numSamples > 0) ? std::sqrt(sumSquare / (float)numSamples) : 0.0f;
 }
 
 //read audio data from socket
@@ -346,11 +380,19 @@ void MainWindow::readSocket3()
 
     if( bstream_recognition)
     {
+        std::vector<float> processedSamples;
+        float rms = ApplyBandPassAndCalculateRMS(pShort, length / 2, processedSamples, msetting.bEnableAudioNoiseFilter);
+
+        // Audio noise gate: if RMS is below threshold, treat chunk as silent background noise
+        if (msetting.bEnableAudioNoiseFilter && rms < msetting.fAudioNoiseThreshold)
+        {
+            std::fill(processedSamples.begin(), processedSamples.end(), 0.0f);
+        }
+
         thread_whisper.mtx_whisper_buffer.lock();
         for( long long i = 0; i<length/2 ; i++)
         {
-            short value = *(pShort + i);
-            thread_whisper.pcmf32_new[i+thread_whisper.bufferlength] = ((float)value / 32768.0f);
+            thread_whisper.pcmf32_new[i+thread_whisper.bufferlength] = processedSamples[i];
         }
         thread_whisper.bufferlength += length/2;
         thread_whisper.mtx_whisper_buffer.unlock();
