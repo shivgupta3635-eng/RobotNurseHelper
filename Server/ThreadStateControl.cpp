@@ -7,6 +7,8 @@
 
 #include <cstdlib> // For rand() and srand()
 #include <ctime>   // For time()
+#include <sstream>
+#include <algorithm>
 #include "utility_json.hpp"
 #include "ollama.hpp"
 #include <filesystem>
@@ -24,6 +26,14 @@ ThreadStateControl::~ThreadStateControl()
 void ThreadStateControl::SetSettingFile(const QString &filePath)
 {
     LoadJSONFile(msetting, filePath.toStdString());
+    if (msetting.StateControlFile.find("_English.json") != std::string::npos ||
+        msetting.StateControlFile.find("eng_") != std::string::npos) {
+        msetting.Language = "English";
+    } else if (msetting.StateControlFile.find("Chinese") != std::string::npos ||
+               msetting.StateControlFile == "json/Cataractproject.json" ||
+               msetting.StateControlFile == "json/Cataract.json") {
+        msetting.Language = "Chinese";
+    }
     //After loading the setting, I can set the initial state of the state control thread.
     InitializeStates();
 }
@@ -524,32 +534,126 @@ void ThreadStateControl::SetIntialStateIndex(int N) {
 
 string ThreadStateControl::GetPatientName(string input_sentence){
     ollama::options options;
-    //options["seed"] = 1;      
     options["seed"] = rand();
-    options["temperature"] = 0.3;
-    options["num_ctx"] = 131072; //number of context tokens, which is the maximum number of tokens the model can handle in a single request
+    options["temperature"] = 0.1;
+    options["num_ctx"] = 131072;
 
+    string prompt = "You are a robot assistant named Kebbi. Extract ONLY the speaker's (patient's) name from the input sentence.\n"
+                    "Rules:\n"
+                    "1. Return ONLY the exact speaker name present in the input sentence.\n"
+                    "2. Do NOT include the robot's name (Kebbi, Kebby, KV, 凱比, 凯比).\n"
+                    "3. Do NOT include greetings (hello, hi, I am, my name is) or explanations.\n"
+                    "4. Do NOT hallucinate or invent names not spoken in the input sentence.\n"
+                    "Sentence: \"" + input_sentence + "\"\n"
+                    "Speaker Name:";    
 
-    // 建立更嚴謹的 Prompt，要求模型只輸出 JSON 或純名字
-    string prompt = "你是一個機器人助手。請從以下句子中提取說話者的姓名。"
-                    "規則：1.只回傳姓名 2.不要有任何標點或解釋。"
-                    "句子：\"" + input_sentence + "\"";    
-    // 呼叫 Ollama
     string ModelName = "gemma3:1b";
     string name = ollama::generate(ModelName, prompt, options);
 
-    // 去除 LLM 可能誤加的空白或換行
-    auto start_pos = name.find_first_not_of(" \n\r\t");
-    if (start_pos == string::npos) {
-        name.clear();
-    } else {
-        auto end_pos = name.find_last_not_of(" \n\r\t");
-        name = name.substr(start_pos, end_pos - start_pos + 1);
+    // Robot name patterns to strip out case-insensitively
+    vector<string> robot_names = {"kebbi", "kebby", "kv", "zenbo", "凱比", "凯比"};
+    
+    stringstream ss(name);
+    string line;
+    string cleaned_name = "";
+    
+    while (getline(ss, line)) {
+        // Trim whitespace and quotes
+        auto start = line.find_first_not_of(" \t\r\n\"'");
+        if (start == string::npos) continue;
+        auto end = line.find_last_not_of(" \t\r\n\"'.");
+        line = line.substr(start, end - start + 1);
+        if (line.empty()) continue;
+
+        string line_lower = line;
+        transform(line_lower.begin(), line_lower.end(), line_lower.begin(), ::tolower);
+        
+        bool is_robot_name = false;
+        for (const auto& rname : robot_names) {
+            if (line_lower == rname) {
+                is_robot_name = true;
+                break;
+            }
+        }
+        if (is_robot_name) continue;
+
+        // Strip embedded robot names
+        for (const auto& rname : robot_names) {
+            size_t pos;
+            while ((pos = line_lower.find(rname)) != string::npos) {
+                line.erase(pos, rname.length());
+                line_lower.erase(pos, rname.length());
+            }
+        }
+
+        // Re-trim line after removing robot name
+        start = line.find_first_not_of(" \t\r\n\"',.");
+        if (start == string::npos) continue;
+        end = line.find_last_not_of(" \t\r\n\"',.");
+        line = line.substr(start, end - start + 1);
+
+        if (!line.empty()) {
+            if (!cleaned_name.empty()) cleaned_name += " ";
+            cleaned_name += line;
+        }
     }
 
-    cout << "Extracted patient name by LLM: " << name << endl;
+    // Helper lambda to extract name from phrase if LLM hallucinates
+    auto extract_name_from_phrase = [](const string& sentence) -> string {
+        string lower = sentence;
+        transform(lower.begin(), lower.end(), lower.begin(), ::tolower);
+        vector<string> prefixes = {
+            "my name is ", "i am ", "i'm ", "call me ", "this is ",
+            "我是", "叫我", "我叫"
+        };
+        for (const auto& pref : prefixes) {
+            size_t pos = lower.find(pref);
+            if (pos != string::npos) {
+                string sub = sentence.substr(pos + pref.length());
+                auto start = sub.find_first_not_of(" \t\r\n\"',.");
+                if (start != string::npos) {
+                    auto end = sub.find_last_not_of(" \t\r\n\"',.");
+                    sub = sub.substr(start, end - start + 1);
+                    if (!sub.empty()) return sub;
+                }
+            }
+        }
+        return "";
+    };
+
+    // Sanity check against input_sentence: check if words in cleaned_name exist in input_sentence
+    string input_lower = input_sentence;
+    transform(input_lower.begin(), input_lower.end(), input_lower.begin(), ::tolower);
+    string cleaned_lower = cleaned_name;
+    transform(cleaned_lower.begin(), cleaned_lower.end(), cleaned_lower.begin(), ::tolower);
+
+    stringstream token_ss(cleaned_lower);
+    string word;
+    int total_words = 0;
+    int invalid_words = 0;
+    while (token_ss >> word) {
+        total_words++;
+        if (input_lower.find(word) == string::npos) {
+            invalid_words++;
+        }
+    }
+
+    if (total_words == 0 || invalid_words > 0) {
+        string fallback = extract_name_from_phrase(input_sentence);
+        if (!fallback.empty()) {
+            cleaned_name = fallback;
+        } else if (cleaned_name.empty()) {
+            auto start_pos = name.find_first_not_of(" \n\r\t\"'");
+            if (start_pos != string::npos) {
+                auto end_pos = name.find_last_not_of(" \n\r\t\"'.");
+                cleaned_name = name.substr(start_pos, end_pos - start_pos + 1);
+            }
+        }
+    }
+
+    cout << "Extracted patient name by LLM (raw): " << name << " -> cleaned: " << cleaned_name << endl;
     
-    return name;
+    return cleaned_name;
 }
 
 string ThreadStateControl::ConvertMessageHistoryToString(vector<string> message_history)
@@ -585,37 +689,38 @@ string ThreadStateControl::ReplaceVariables(string sentence)
     {
         string sPatientGender = mpThreadProcessImage->GetPatientGender(); //update the patient
         int iPatientAge = mpThreadProcessImage->GetPatientAge();
-        if( iPatientAge != -1 )
+
+        if (sPatientGender == "Male")
         {
-            if( iPatientAge < 10 )
-            {
-                msPatientTitle = m_mapPatientTitles["Child"];
+            msPatientTitle = m_mapPatientTitles["MaleAdult"];
+            if (msPatientTitle.empty()) {
+                msPatientTitle = (msetting.Language == "English") ? "Mr." : "先生";
             }
-            else if( iPatientAge < 20 )
+        }
+        else if (sPatientGender == "Female")
+        {
+            if (iPatientAge != -1 && iPatientAge < 40 && m_mapPatientTitles.count("FemaleYoungAdult") && !m_mapPatientTitles["FemaleYoungAdult"].empty())
             {
-                msPatientTitle = m_mapPatientTitles["Youth"];
+                msPatientTitle = m_mapPatientTitles["FemaleYoungAdult"];
+            }
+            else if (m_mapPatientTitles.count("FemaleOlderAdult") && !m_mapPatientTitles["FemaleOlderAdult"].empty())
+            {
+                msPatientTitle = m_mapPatientTitles["FemaleOlderAdult"];
             }
             else
             {
-                if( sPatientGender == "Male" )
-                {
-                    msPatientTitle = m_mapPatientTitles["MaleAdult"];
-                }
-                else if ( sPatientGender == "Female" )
-                {
-                    if( iPatientAge < 40 )
-                    {
-                        msPatientTitle = m_mapPatientTitles["FemaleYoungAdult"];
-                    }
-                    else
-                    {
-                        msPatientTitle = m_mapPatientTitles["FemaleOlderAdult"];
-                    }
-                }
-                else
-                {
-                    msPatientTitle = "";
-                }
+                msPatientTitle = (msetting.Language == "English") ? "Ms." : "女士";
+            }
+        }
+        else
+        {
+            if (iPatientAge != -1 && iPatientAge < 10 && m_mapPatientTitles.count("Child") && !m_mapPatientTitles["Child"].empty())
+            {
+                msPatientTitle = m_mapPatientTitles["Child"];
+            }
+            else
+            {
+                msPatientTitle = (msetting.Language == "English") ? "Mr." : "先生";
             }
         }
 
@@ -648,14 +753,14 @@ void ThreadStateControl::LoadPatientTitles()
     // Set fallback defaults based on language
     if (msetting.Language == "English") {
         m_mapPatientTitles["Child"] = "Kid";
-        m_mapPatientTitles["Youth"] = "Student";
+        m_mapPatientTitles["Youth"] = "";
         m_mapPatientTitles["MaleAdult"] = "Mr.";
         m_mapPatientTitles["FemaleYoungAdult"] = "Miss";
         m_mapPatientTitles["FemaleOlderAdult"] = "Ms.";
     } else {
         // Default to Chinese
         m_mapPatientTitles["Child"] = "小朋友";
-        m_mapPatientTitles["Youth"] = "同學";
+        m_mapPatientTitles["Youth"] = "";
         m_mapPatientTitles["MaleAdult"] = "先生";
         m_mapPatientTitles["FemaleYoungAdult"] = "小姐";
         m_mapPatientTitles["FemaleOlderAdult"] = "女士";

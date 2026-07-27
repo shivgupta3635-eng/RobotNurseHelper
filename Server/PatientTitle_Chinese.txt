@@ -1,6 +1,6 @@
 # Chinese Patient Titles Configuration
 Child:小朋友
-Youth:同學
+Youth:
 MaleAdult:先生
 FemaleYoungAdult:小姐
 FemaleOlderAdult:女士

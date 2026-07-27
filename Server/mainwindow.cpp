@@ -51,6 +51,16 @@ void MainWindow::setSettingFile(const QString &filePath)
 {
     LoadJSONFile(msetting, filePath.toStdString());
 
+    // Ensure language aligns with the state control JSON
+    if (msetting.StateControlFile.find("_English.json") != std::string::npos ||
+        msetting.StateControlFile.find("eng_") != std::string::npos) {
+        msetting.Language = "English";
+    } else if (msetting.StateControlFile.find("Chinese") != std::string::npos ||
+               msetting.StateControlFile == "json/Cataractproject.json" ||
+               msetting.StateControlFile == "json/Cataract.json") {
+        msetting.Language = "Chinese";
+    }
+
     // Use the loaded Language setting to show and use the correct language
     setLanguage(QString::fromStdString(msetting.Language));
     ui->comboBox_Language->setCurrentText(QString::fromStdString(msetting.Language));
