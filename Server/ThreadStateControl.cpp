@@ -123,6 +123,72 @@ std::string ThreadStateControl::GetLocalizedImagePath(const std::string &origina
     return originalPath;
 }
 
+std::string ThreadStateControl::GetLocalizedVideoPath(const std::string &originalPath)
+{
+    namespace fs = std::filesystem;
+    fs::path p(originalPath);
+    std::string filename = p.filename().string();
+
+    // Determine base filename without "Eng_" or "eng_" prefix if present
+    std::string baseName = filename;
+    if (baseName.rfind("Eng_", 0) == 0) {
+        baseName = baseName.substr(4);
+    } else if (baseName.rfind("eng_", 0) == 0) {
+        baseName = baseName.substr(4);
+    }
+
+    if (msetting.Language == "English") {
+        // Priority list for English video:
+        // 1. Eng_videos/Eng_<baseName>
+        // 2. Eng_videos/eng_<baseName>
+        // 3. Eng_videos/<baseName>
+        // 4. eng_videos/Eng_<baseName>
+        // 5. eng_videos/eng_<baseName>
+        // 6. eng_videos/<baseName>
+        // 7. Videos/Eng_<baseName>
+        // 8. Videos/eng_<baseName>
+        // 9. originalPath (if exists)
+        // 10. Videos/<baseName>
+        std::vector<fs::path> candidates = {
+            fs::path("Eng_videos") / ("Eng_" + baseName),
+            fs::path("Eng_videos") / ("eng_" + baseName),
+            fs::path("Eng_videos") / baseName,
+            fs::path("eng_videos") / ("Eng_" + baseName),
+            fs::path("eng_videos") / ("eng_" + baseName),
+            fs::path("eng_videos") / baseName,
+            fs::path("Videos") / ("Eng_" + baseName),
+            fs::path("Videos") / ("eng_" + baseName),
+            fs::path(originalPath),
+            fs::path("Videos") / baseName
+        };
+
+        for (const auto& cand : candidates) {
+            if (!cand.empty() && fs::exists(cand)) {
+                return cand.string();
+            }
+        }
+    } else {
+        // Chinese or other languages:
+        // Priority list for Chinese / default video:
+        // 1. Videos/<baseName>
+        // 2. videos/<baseName>
+        // 3. originalPath (if exists)
+        std::vector<fs::path> candidates = {
+            fs::path("Videos") / baseName,
+            fs::path("videos") / baseName,
+            fs::path(originalPath)
+        };
+
+        for (const auto& cand : candidates) {
+            if (!cand.empty() && fs::exists(cand)) {
+                return cand.string();
+            }
+        }
+    }
+
+    return originalPath;
+}
+
 void ThreadStateControl::NextState()
 {
     m_iStateIndex++;
@@ -172,7 +238,10 @@ void ThreadStateControl::run()
                 if( s.find("PlayVideo:") != string::npos )
                 {
                     size_t pos = s.find(":");
-                    emit playVideoRequest(s.substr(pos + 1).c_str());
+                    std::string rawVideoPath = s.substr(pos + 1);
+                    std::string locVideoPath = GetLocalizedVideoPath(rawVideoPath);
+                    cout << "[ThreadStateControl] Language=" << msetting.Language << " selected video: " << locVideoPath << endl;
+                    emit playVideoRequest(locVideoPath.c_str());
                     str_voice_source = "Video";
                 }
 
@@ -239,10 +308,22 @@ void ThreadStateControl::run()
 
         }  //if(mStates[m_iStateIndex].bInitial)
 
-        if( mStates[m_iStateIndex].sStateType == "SaySomething" || mStates[m_iStateIndex].sStateType == "PlayVideo")   //Robot does not wait for patient's response
+        if( mStates[m_iStateIndex].sStateType == "SaySomething" )   //Robot does not wait for patient's response
         {
             if( current_time - mStates[m_iStateIndex].m_Start_time > mStates[m_iStateIndex].m_secDurationLimit)
             {
+                mbReadyToChangeState = true;
+                mbOldStateComplete = true;
+            }
+        }
+        else if( mStates[m_iStateIndex].sStateType == "PlayVideo" )
+        {
+            // For PlayVideo state, wait until onVideoComplete event is received from VideoWindow (when media reaches EndOfMedia).
+            // A generous fallback timeout (600s) prevents getting stuck if video window is closed or unavailable.
+            auto maxDuration = std::max(mStates[m_iStateIndex].m_secDurationLimit, std::chrono::seconds(600));
+            if( current_time - mStates[m_iStateIndex].m_Start_time > maxDuration )
+            {
+                cout << "[ThreadStateControl] Video safety timeout reached (" << maxDuration.count() << "s). Advancing state." << endl;
                 mbReadyToChangeState = true;
                 mbOldStateComplete = true;
             }

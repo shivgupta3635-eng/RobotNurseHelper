@@ -1,7 +1,7 @@
 {
     "StateControlFile": "json/Cataractproject_English.json",
     "bServerPlaysRobotReceivedAudio": false,
-    "bVideoWindowFullScreen": true,
+    "bVideoWindowFullScreen": false,
     "bShowPreviewWindow": false,
     "bSaveImages": true,
     "iImageSaveIntervalMillisecond": 5000,
@@ -21,7 +21,7 @@
     "ImageSaveDirectory": "/home/shruti/Downloads/raw_images",
     "LanguageModel": "gemma3:1b",
     "Language": "English",
-    "AnythingLLM_API_key": "21A4MPKM-ASBMV6A-MYHCJFM-1M6YB1B",
+    "AnythingLLM_API_key": "1A4MPKM-ASBMV6A-MYHCJFM-1M6YB1B",
     "AnythingLLM_workspace_slug": "my-workspace",
     "Machine": "PC",
     "bHideCursor": true,

@@ -78,6 +78,7 @@ public:
     void Restart();
     void SetStopInterrupted(bool interrupted);
     std::string GetLocalizedImagePath(const std::string &originalPath);
+    std::string GetLocalizedVideoPath(const std::string &originalPath);
 
 signals:
     void playVideoRequest(const QString& videoPath);
