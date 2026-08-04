@@ -517,7 +517,7 @@
         "sImageFileName": "Images/state 22.png"
     },
     {
-        "iDurationLimitSeconds": 100,
+        "iDurationLimitSeconds": 10,
         "iNextStateIndex": 24,
         "iStateIndex": 23,
         "m_strFirstSentence": "Do you have any questions about the content?",

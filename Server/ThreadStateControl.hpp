@@ -98,6 +98,7 @@ protected:
     bool mbWaitForTTSComplete = false;
     chrono::time_point<chrono::system_clock> mtimestamp_TTSComplete;
     chrono::time_point<chrono::system_clock> mtimestamp_VideoComplete;
+    chrono::time_point<chrono::system_clock> mtimestamp_LastProcessedSTT;
 
 
     bool mbLLMResult = false;

@@ -301,6 +301,13 @@ WhisperData ThreadWhisper::getLatestResult()
     return sendout;
 }
 
+void ThreadWhisper::ClearLatestResult()
+{
+    mtx.lock();
+    mResult = WhisperData();
+    mtx.unlock();
+}
+
 void ThreadWhisper::ClearBuffer()
 {
     mtx_whisper_buffer.lock();
@@ -310,6 +317,7 @@ void ThreadWhisper::ClearBuffer()
 //    strRobotSentence = "";
     strTemp = "";
     mtx_whisper_buffer.unlock();
+    ClearLatestResult();
 }
 
 // Compute the volume of the audio signal, too simple to take an affect

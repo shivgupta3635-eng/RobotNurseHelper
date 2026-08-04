@@ -1,7 +1,7 @@
 {
     "StateControlFile": "json/Cataractproject_English.json",
-    "bServerPlaysRobotReceivedAudio": false,
-    "bVideoWindowFullScreen": false,
+    "bServerPlaysRobotReceivedAudio": true,
+    "bVideoWindowFullScreen": true,
     "bShowPreviewWindow": true,
     "bSaveImages": true,
     "iImageSaveIntervalMillisecond": 5000,

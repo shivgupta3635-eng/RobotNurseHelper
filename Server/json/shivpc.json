@@ -1,8 +1,8 @@
 {
     "StateControlFile": "json/Cataractproject_English.json",
     "bServerPlaysRobotReceivedAudio": false,
-    "bVideoWindowFullScreen": false,
-    "bShowPreviewWindow": false,
+    "bVideoWindowFullScreen": true,
+    "bShowPreviewWindow": true,
     "bSaveImages": true,
     "iImageSaveIntervalMillisecond": 5000,
     "bFacialExpressionRecognition": false,
@@ -26,7 +26,7 @@
     "Machine": "PC",
     "bHideCursor": true,
     "bEnableAudioNoiseFilter": true,
-    "fAudioNoiseThreshold": 0.005,
+    "fAudioNoiseThreshold": 0.02,
     "fWhisperNoSpeechThreshold": 0.5,
     "bFilterHallucinatedNoiseText": true
 }
