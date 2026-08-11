@@ -1,5 +1,5 @@
 # English Patient Titles Configuration
-Child:Kid
+Child:
 Youth:
 MaleAdult:Mr.
 FemaleYoungAdult:Miss

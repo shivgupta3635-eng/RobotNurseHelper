@@ -405,10 +405,10 @@ void ThreadStateControl::run()
                         if( mStates[m_iStateIndex].m_strStateName == "Greeting 1 and ask name" )
                         {
                             std::string extractedName = GetPatientName(WhisperResult.sOutput);
-                            if( !extractedName.empty() )
+                            if( !extractedName.empty() || !msPatientTitle.empty() )
                             {
                                 msPatientName = extractedName;
-                                cout << "Extracted patient name: " << msPatientName << endl;
+                                cout << "Extracted patient name: " << msPatientName << " (title: " << msPatientTitle << ")" << endl;
                                 mbReadyToChangeState = true;
                                 mbOldStateComplete = true;
                             }
@@ -618,6 +618,62 @@ string ThreadStateControl::GetPatientName(string input_sentence)
     std::string lower = input_sentence;
     std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c){ return static_cast<char>(std::tolower(c)); });
 
+    // Detect female or male keywords in spoken input sentence to set salutation (title)
+    bool isFemaleSpoken = false;
+    bool isMaleSpoken = false;
+
+    if (lower.find("girl") != string::npos || lower.find("female") != string::npos ||
+        lower.find("woman") != string::npos || lower.find("lady") != string::npos ||
+        lower.find("miss") != string::npos || lower.find("ms.") != string::npos ||
+        lower.find("ms ") != string::npos || lower.find("mrs") != string::npos ||
+        input_sentence.find("小姐") != string::npos || input_sentence.find("女士") != string::npos ||
+        input_sentence.find("女生") != string::npos || input_sentence.find("女孩") != string::npos ||
+        input_sentence.find("女性") != string::npos)
+    {
+        isFemaleSpoken = true;
+    }
+
+    if (lower.find("boy") != string::npos || lower.find("male") != string::npos ||
+        lower.find("man") != string::npos || lower.find("guy") != string::npos ||
+        lower.find("gentleman") != string::npos || lower.find("mr.") != string::npos ||
+        lower.find("mr ") != string::npos || lower.find("sir") != string::npos ||
+        input_sentence.find("先生") != string::npos || input_sentence.find("男生") != string::npos ||
+        input_sentence.find("男孩") != string::npos || input_sentence.find("男性") != string::npos)
+    {
+        isMaleSpoken = true;
+    }
+
+    if (isFemaleSpoken && !isMaleSpoken)
+    {
+        if (msetting.Language == "English")
+        {
+            if (lower.find("miss") != string::npos)
+                msPatientTitle = "Miss";
+            else if (lower.find("mrs") != string::npos)
+                msPatientTitle = "Mrs.";
+            else
+                msPatientTitle = "Ms.";
+        }
+        else
+        {
+            if (input_sentence.find("女士") != string::npos)
+                msPatientTitle = "女士";
+            else
+                msPatientTitle = "小姐";
+        }
+    }
+    else if (isMaleSpoken && !isFemaleSpoken)
+    {
+        if (msetting.Language == "English")
+        {
+            msPatientTitle = "Mr.";
+        }
+        else
+        {
+            msPatientTitle = "先生";
+        }
+    }
+
     std::string candidate;
     bool namePhraseFound = false;
 
@@ -707,6 +763,21 @@ string ThreadStateControl::GetPatientName(string input_sentence)
         return "";
     }
 
+    // Check if candidate itself is a generic gender description (e.g. "a girl", "girl", "female", "女生", etc.)
+    vector<string> genericGenderPhrases = {
+        "girl", "a girl", "female", "a female", "woman", "a woman", "lady", "a lady",
+        "boy", "a boy", "male", "a male", "man", "a man", "guy", "a guy",
+        "女生", "女孩", "女性", "男生", "男孩", "男性"
+    };
+    for (const auto& g : genericGenderPhrases)
+    {
+        if (lowerCandidate == g)
+        {
+            cout << "Recognized spoken gender statement: " << candidate << " (title: " << msPatientTitle << ")" << endl;
+            return "";
+        }
+    }
+
     string extractedName = candidate;
     if (extractedName.empty())
     {
@@ -740,50 +811,55 @@ string ThreadStateControl::GetPatientName(string input_sentence)
     string lowerName = extractedName;
     std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), [](unsigned char c){ return static_cast<char>(std::tolower(c)); });
 
-    if (lowerName.rfind("mr. ", 0) == 0 || lowerName.rfind("mr ", 0) == 0)
+    if (lowerName.rfind("mr. ", 0) == 0 || lowerName.rfind("mr ", 0) == 0 || lowerName == "mr." || lowerName == "mr")
     {
         msPatientTitle = "Mr.";
         size_t sp = extractedName.find(' ');
         if (sp != string::npos) extractedName = extractedName.substr(sp + 1);
+        else extractedName = "";
     }
-    else if (lowerName.rfind("ms. ", 0) == 0 || lowerName.rfind("ms ", 0) == 0)
+    else if (lowerName.rfind("ms. ", 0) == 0 || lowerName.rfind("ms ", 0) == 0 || lowerName == "ms." || lowerName == "ms")
     {
         msPatientTitle = "Ms.";
         size_t sp = extractedName.find(' ');
         if (sp != string::npos) extractedName = extractedName.substr(sp + 1);
+        else extractedName = "";
     }
-    else if (lowerName.rfind("mrs. ", 0) == 0 || lowerName.rfind("mrs ", 0) == 0)
+    else if (lowerName.rfind("mrs. ", 0) == 0 || lowerName.rfind("mrs ", 0) == 0 || lowerName == "mrs." || lowerName == "mrs")
     {
         msPatientTitle = "Mrs.";
         size_t sp = extractedName.find(' ');
         if (sp != string::npos) extractedName = extractedName.substr(sp + 1);
+        else extractedName = "";
     }
-    else if (lowerName.rfind("miss ", 0) == 0)
+    else if (lowerName.rfind("miss ", 0) == 0 || lowerName == "miss")
     {
         msPatientTitle = "Miss";
         size_t sp = extractedName.find(' ');
         if (sp != string::npos) extractedName = extractedName.substr(sp + 1);
+        else extractedName = "";
     }
-    else if (lowerName.rfind("dr. ", 0) == 0 || lowerName.rfind("dr ", 0) == 0)
+    else if (lowerName.rfind("dr. ", 0) == 0 || lowerName.rfind("dr ", 0) == 0 || lowerName == "dr." || lowerName == "dr")
     {
         msPatientTitle = "Dr.";
         size_t sp = extractedName.find(' ');
         if (sp != string::npos) extractedName = extractedName.substr(sp + 1);
+        else extractedName = "";
     }
-    else if (extractedName.length() > 6 && extractedName.substr(extractedName.length() - 6) == "先生")
+    else if (extractedName.length() >= 6 && extractedName.substr(extractedName.length() - 6) == "先生")
     {
         msPatientTitle = "先生";
-        extractedName = extractedName.substr(0, extractedName.length() - 6);
+        extractedName = (extractedName.length() == 6) ? "" : extractedName.substr(0, extractedName.length() - 6);
     }
-    else if (extractedName.length() > 6 && extractedName.substr(extractedName.length() - 6) == "小姐")
+    else if (extractedName.length() >= 6 && extractedName.substr(extractedName.length() - 6) == "小姐")
     {
         msPatientTitle = "小姐";
-        extractedName = extractedName.substr(0, extractedName.length() - 6);
+        extractedName = (extractedName.length() == 6) ? "" : extractedName.substr(0, extractedName.length() - 6);
     }
-    else if (extractedName.length() > 6 && extractedName.substr(extractedName.length() - 6) == "女士")
+    else if (extractedName.length() >= 6 && extractedName.substr(extractedName.length() - 6) == "女士")
     {
         msPatientTitle = "女士";
-        extractedName = extractedName.substr(0, extractedName.length() - 6);
+        extractedName = (extractedName.length() == 6) ? "" : extractedName.substr(0, extractedName.length() - 6);
     }
 
     extractedName.erase(0, extractedName.find_first_not_of(" \n\r\t"));
@@ -831,59 +907,30 @@ string ThreadStateControl::ReplaceVariables(string sentence)
 
     if (msPatientTitle.empty())
     {
-        if (iPatientAge != -1)
+        if (sPatientGender == "Male")
         {
-            if (iPatientAge < 10)
-            {
-                msPatientTitle = m_mapPatientTitles["Child"];
-            }
-            else if (iPatientAge < 20)
-            {
-                msPatientTitle = m_mapPatientTitles["Youth"];
-            }
-            else
-            {
-                if (sPatientGender == "Male")
-                {
-                    msPatientTitle = m_mapPatientTitles["MaleAdult"];
-                }
-                else if (sPatientGender == "Female")
-                {
-                    if (iPatientAge < 40)
-                    {
-                        msPatientTitle = m_mapPatientTitles["FemaleYoungAdult"];
-                    }
-                    else
-                    {
-                        msPatientTitle = m_mapPatientTitles["FemaleOlderAdult"];
-                    }
-                }
-            }
-        }
-
-        // If age is unknown (-1) or title is still empty, check gender
-        if (msPatientTitle.empty())
-        {
-            if (sPatientGender == "Male")
+            if (m_mapPatientTitles.count("MaleAdult") && !m_mapPatientTitles["MaleAdult"].empty())
             {
                 msPatientTitle = m_mapPatientTitles["MaleAdult"];
             }
-            else if (sPatientGender == "Female")
+            else
+            {
+                msPatientTitle = (msetting.Language == "English") ? "Mr." : "先生";
+            }
+        }
+        else if (sPatientGender == "Female")
+        {
+            if (iPatientAge != -1 && iPatientAge < 40 && m_mapPatientTitles.count("FemaleYoungAdult") && !m_mapPatientTitles["FemaleYoungAdult"].empty())
+            {
+                msPatientTitle = m_mapPatientTitles["FemaleYoungAdult"];
+            }
+            else if (m_mapPatientTitles.count("FemaleOlderAdult") && !m_mapPatientTitles["FemaleOlderAdult"].empty())
             {
                 msPatientTitle = m_mapPatientTitles["FemaleOlderAdult"];
             }
-        }
-
-        // Fallback default if title is still empty when {PatientTitle} is requested
-        if (msPatientTitle.empty())
-        {
-            if (msetting.Language == "English")
-            {
-                msPatientTitle = "Mr.";
-            }
             else
             {
-                msPatientTitle = "先生";
+                msPatientTitle = (msetting.Language == "English") ? "Ms." : "小姐";
             }
         }
     }
@@ -934,15 +981,15 @@ void ThreadStateControl::LoadPatientTitles()
 
     // Set fallback defaults based on language
     if (msetting.Language == "English") {
-        m_mapPatientTitles["Child"] = "Kid";
-        m_mapPatientTitles["Youth"] = "Student";
+        m_mapPatientTitles["Child"] = "";
+        m_mapPatientTitles["Youth"] = "";
         m_mapPatientTitles["MaleAdult"] = "Mr.";
         m_mapPatientTitles["FemaleYoungAdult"] = "Miss";
         m_mapPatientTitles["FemaleOlderAdult"] = "Ms.";
     } else {
         // Default to Chinese
-        m_mapPatientTitles["Child"] = "小朋友";
-        m_mapPatientTitles["Youth"] = "同學";
+        m_mapPatientTitles["Child"] = "";
+        m_mapPatientTitles["Youth"] = "";
         m_mapPatientTitles["MaleAdult"] = "先生";
         m_mapPatientTitles["FemaleYoungAdult"] = "小姐";
         m_mapPatientTitles["FemaleOlderAdult"] = "女士";
@@ -978,7 +1025,9 @@ void ThreadStateControl::LoadPatientTitles()
                 value.erase(0, value.find_first_not_of(" \t\r\n"));
                 value.erase(value.find_last_not_of(" \t\r\n") + 1);
 
-                m_mapPatientTitles[key] = value;
+                if (!value.empty()) {
+                    m_mapPatientTitles[key] = value;
+                }
             }
         }
         file.close();
