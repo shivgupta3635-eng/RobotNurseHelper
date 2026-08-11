@@ -28,7 +28,7 @@
         "sImageFileName": "Images/state 0.png"
     },
     {
-        "iDurationLimitSeconds": 10,
+        "iDurationLimitSeconds": 20,
         "iNextStateIndex": 2,
         "iStateIndex": 1,
         "m_strFirstSentence": "Hello, I am glad to be of service to you. I am Kebbi, the health education robot. How may I address you?",
@@ -52,7 +52,7 @@
         "sImageFileName": "Images/state 1.png"
     },
     {
-        "iDurationLimitSeconds": 10,
+        "iDurationLimitSeconds": 15,
         "iNextStateIndex": 3,
         "iStateIndex": 2,
         "m_strFirstSentence": "Hello {PatientTitle} {PatientName}, the doctor just checked and confirmed that you have cataracts. Have you recently felt that your vision is blurry, as if looking through a sheet of frosted glass, or do lights at night seem very scattered?",
@@ -240,43 +240,55 @@
         "sImageFileName": "Images/state 10.png"
     },
     {
-        "iDurationLimitSeconds": 10,
+        "iDurationLimitSeconds": 30,
         "iNextStateIndex": 12,
         "iStateIndex": 11,
         "m_strFirstSentence": "First question: If you choose a 'monofocal' lens and can see far away clearly, do you need to wear reading glasses to look at your phone or read a book?",
         "m_strStateName": "Quiz Q1 - Vision Scope",
         "sFace": "TTS_PeaceA",
         "sMotion": "666_BA_Nodhead",
-        "sStateType": "Conversation",
+        "sStateType": "RobotAskPatientAnswer",
         "vSmallMotion": [
             "666_BA_Nodhead"
         ],
-        "v_str_KeyWordMoveToNextState": [],
+        "v_str_KeyWordMoveToNextState": [
+            "yes",
+            "yeah",
+            "need",
+            "do",
+            "required"
+        ],
         "v_str_Action": [
             "AccumulateConversation"
         ],
         "sImageFileName": "Images/state 11.png"
     },
     {
-        "iDurationLimitSeconds": 10,
+        "iDurationLimitSeconds": 30,
         "iNextStateIndex": 13,
         "iStateIndex": 12,
         "m_strFirstSentence": "Second question: If you usually enjoy cooking or using a computer, which belongs to 'intermediate distance', which type of lens is more natural for intermediate vision and provides continuous eyesight?",
         "m_strStateName": "Quiz Q2 - Mid distance",
         "sFace": "TTS_PeaceB",
         "sMotion": "666_SA_Think",
-        "sStateType": "Conversation",
+        "sStateType": "RobotAskPatientAnswer",
         "vSmallMotion": [
             "666_BA_Nodhead"
         ],
-        "v_str_KeyWordMoveToNextState": [],
+        "v_str_KeyWordMoveToNextState": [
+            "edof",
+            "extended depth",
+            "extended",
+            "multifocal",
+            "trifocal"
+        ],
         "v_str_Action": [
             "AccumulateConversation"
         ],
         "sImageFileName": "Images/state 12.png"
     },
     {
-        "iDurationLimitSeconds": 10,
+        "iDurationLimitSeconds": 30,
         "iNextStateIndex": 14,
         "iStateIndex": 13,
         "m_strFirstSentence": "Third question: If you hope that after the surgery, you won't need to wear glasses 'most of the time' for driving, looking at the computer, or reading your phone, which type of lens is best suited for you?",
@@ -284,11 +296,15 @@
         "m_strSystemMessage": "",
         "sFace": "TTS_PeaceA",
         "sMotion": "666_SP_Cheer",
-        "sStateType": "Conversation",
+        "sStateType": "RobotAskPatientAnswer",
         "vSmallMotion": [
             "666_BA_Nodhead"
         ],
-        "v_str_KeyWordMoveToNextState": [],
+        "v_str_KeyWordMoveToNextState": [
+            "trifocal",
+            "multifocal",
+            "edof"
+        ],
         "v_str_Action": [
             "AccumulateConversation"
         ],
@@ -336,7 +352,7 @@
         "sImageFileName": ""
     },
     {
-        "iDurationLimitSeconds": 181,
+        "iDurationLimitSeconds": 185,
         "iNextStateIndex": 17,
         "iStateIndex": 16,
         "m_strFirstSentence": "",
@@ -354,7 +370,7 @@
         "v_str_KeyWordMoveToNextState": [],
         "v_str_Action": [
             "KeepSilent",
-            "PlayVideo:Videos/Cataract_Preop.mp4",
+            "PlayVideo:Eng_videos/Eng_Cataract_Preop.mp4",
             "AccumulateConversation",
             "InsertAssitantMessage:Point 1: Please get plenty of sleep the night before surgery. Keeping your body and eyes well-rested before surgery helps the procedure go smoothly. Point 2: Please prepare surgery-related documents and your health insurance card. On the day of surgery, please remember to bring your health insurance card, surgical consent form, and other related documents so that the medical staff can process the paperwork more smoothly, making the whole flow more efficient and avoiding the trouble of looking for documents last minute. Point 3: Please wear lightweight clothing on the day of surgery. Choose loose, easy-to-change clothing, which will be more convenient during the surgery and when changing clothes, and will also make you feel more comfortable. Point 4: Do not wear any jewelry before surgery. This includes necklaces, earrings, bracelets, etc., to avoid inconveniences during the operation and ensure the safety and success of the surgery. Point 5: Do not touch anything arbitrarily during the surgery. Please do not touch the sterilized area during the surgery. This is because the nurse has carefully sterilized the related area before the surgery; if you touch it, it must be sterilized again, which not only increases the risk of infection but also prolongs the surgical time, so please be patient and avoid touching. Point 6: Please go to the pharmacy counter after the surgery. After resting, please proceed to the medicine collection counter, where the nursing staff will prepare your post-operative medications and instruct you in detail on post-operative care precautions, so you know how to take care of yourself next."
         ],
@@ -387,7 +403,7 @@
         "sImageFileName": ""
     },
     {
-        "iDurationLimitSeconds": 10,
+        "iDurationLimitSeconds": 30,
         "iNextStateIndex": 19,
         "iStateIndex": 18,
         "m_strFirstSentence": "First question: What is the most important preparation the night before surgery?",
@@ -413,7 +429,7 @@
         "sImageFileName": "Images/state 18.png"
     },
     {
-        "iDurationLimitSeconds": 10,
+        "iDurationLimitSeconds": 30,
         "iNextStateIndex": 20,
         "iStateIndex": 19,
         "m_strFirstSentence": "Second question: What important things should you remember to bring on the day of surgery to process the paperwork?",
@@ -431,7 +447,8 @@
             "documents",
             "paperwork",
             "card",
-            "consent"
+            "consent",
+            "insurance"
         ],
         "v_str_Action": [
             "AccumulateConversation"
@@ -439,7 +456,7 @@
         "sImageFileName": "Images/state 19.png"
     },
     {
-        "iDurationLimitSeconds": 10,
+        "iDurationLimitSeconds": 30,
         "iNextStateIndex": 21,
         "iStateIndex": 20,
         "m_strFirstSentence": "Third question: What kind of clothing is recommended on the day of surgery for convenience?",
@@ -466,7 +483,7 @@
         "sImageFileName": "Images/state 20.png"
     },
     {
-        "iDurationLimitSeconds": 10,
+        "iDurationLimitSeconds": 30,
         "iNextStateIndex": 22,
         "iStateIndex": 21,
         "m_strFirstSentence": "Fourth question: Can you wear necklaces, earrings, or bracelets before surgery?",
@@ -483,7 +500,8 @@
             "cannot",
             "not allowed",
             "don't",
-            "no jewelry"
+            "no jewelry",
+            "can't"
         ],
         "v_str_Action": [
             "AccumulateConversation"
@@ -491,7 +509,7 @@
         "sImageFileName": "Images/state 21.png"
     },
     {
-        "iDurationLimitSeconds": 10,
+        "iDurationLimitSeconds": 30,
         "iNextStateIndex": 23,
         "iStateIndex": 22,
         "m_strFirstSentence": "Fifth question: After the surgery, where should you go to collect medication and listen to the nurse explain the care precautions?",
@@ -517,7 +535,7 @@
         "sImageFileName": "Images/state 22.png"
     },
     {
-        "iDurationLimitSeconds": 10,
+        "iDurationLimitSeconds": 20,
         "iNextStateIndex": 24,
         "iStateIndex": 23,
         "m_strFirstSentence": "Do you have any questions about the content?",
@@ -577,7 +595,7 @@
         "sImageFileName": "Images/state 25.png"
     },
     {
-        "iDurationLimitSeconds": 235,
+        "iDurationLimitSeconds": 240,
         "iNextStateIndex": 27,
         "iStateIndex": 26,
         "m_strFirstSentence": "",
@@ -594,7 +612,7 @@
         "v_str_KeyWordMoveToNextState": [],
         "v_str_Action": [
             "KeepSilent",
-            "PlayVideo:Videos/Cataract_Postop.mp4",
+            "PlayVideo:Eng_videos/Eng_Cataract_Postop.mp4",
             "AccumulateConversation",
             "InsertAssitantMessage:Post-operative precautions for cataracts. Point 1: No eye drops are needed when the eye is covered with gauze. On the day of surgery, your eye will be covered with gauze after the operation, so you do not need to use eye drops on that day. Simply start using the eye drops at the time instructed by your doctor. Point 2: Bring the medications prescribed on the day of surgery to your follow-up visit. When you return for a follow-up visit the day after surgery, please bring the medications prescribed by the doctor on the day of surgery, such as eye drops, ointments, eye shields, or care kits. After the doctor's examination, start using the eye drops according to instructions. Point 3: Sensitivity to light, tearing, and mild local stinging are normal. If you experience sensitivity to light, tearing, or mild stinging in your eyes after surgery, these are normal post-operative reactions. As long as you follow the care instructions, these symptoms will usually subside gradually, so there is no need to worry excessively. Point 4: Seek immediate medical attention or go to the emergency room if you experience any discomfort. If you experience sudden significant vision loss, abnormal pain, eye redness, heavy bleeding, or abnormal discharge after surgery, please return for a follow-up visit or go to the emergency room immediately. Point 5: Rest in bed as much as possible and avoid risky movements. On the day of surgery, please stay in bed as much as possible and avoid any dangerous movements that might cause ocular pressure, such as coughing forcefully, bending over, lifting heavy objects, or engaging in strenuous exercise, to avoid affecting wound healing. Point 6: Maintain a regular life and take medications on time. Please maintain a regular daily routine after surgery, keep your daily schedule stable, avoid overexertion, and take all prescribed medications on time as directed by your doctor. Point 7: Keep water out of your eyes for one month, and do not swim or exercise strenuously. For one month after surgery, please avoid letting water contact your eyes, and avoid swimming or any strenuous physical exercise to ensure eye safety. Point 8: Wear the eye shield for one month, both day and night. For one month after surgery, please wear the eye shield all day, especially during sleep, to ensure eye safety and protection."
         ],
@@ -626,7 +644,7 @@
         "sImageFileName": "Images/state 27.png"
     },
     {
-        "iDurationLimitSeconds": 10,
+        "iDurationLimitSeconds": 30,
         "iNextStateIndex": 29,
         "iStateIndex": 28,
         "m_strFirstSentence": "First question: When your eye is covered with gauze on the day of surgery, can you apply eye drops immediately?",
@@ -642,7 +660,9 @@
             "don't need",
             "unnecessary",
             "not necessary",
-            "no need"
+            "no need",
+            "cannot",
+            "can't"
         ],
         "v_str_Action": [
             "AccumulateConversation"
@@ -650,7 +670,7 @@
         "sImageFileName": "Images/state 28.png"
     },
     {
-        "iDurationLimitSeconds": 10,
+        "iDurationLimitSeconds": 30,
         "iNextStateIndex": 30,
         "iStateIndex": 29,
         "m_strFirstSentence": "Second question: What are you recommended to bring for the doctor's confirmation during the next day's follow-up visit before starting use?",
@@ -670,7 +690,8 @@
             "care kit",
             "drops",
             "shields",
-            "kits"
+            "kits",
+            "meds"
         ],
         "v_str_Action": [
             "AccumulateConversation"
@@ -678,7 +699,7 @@
         "sImageFileName": "Images/state 29.png"
     },
     {
-        "iDurationLimitSeconds": 10,
+        "iDurationLimitSeconds": 30,
         "iNextStateIndex": 31,
         "iStateIndex": 30,
         "m_strFirstSentence": "Third question: Are sensitivity to light, tearing, and mild stinging after surgery generally considered normal?",
@@ -701,7 +722,7 @@
         "sImageFileName": "Images/state 30.png"
     },
     {
-        "iDurationLimitSeconds": 10,
+        "iDurationLimitSeconds": 30,
         "iNextStateIndex": 32,
         "iStateIndex": 31,
         "m_strFirstSentence": "Fourth question: If what conditions occur after surgery, do you need to return for a follow-up visit or go to the emergency room immediately? Please name just one.",
@@ -730,7 +751,7 @@
         "sImageFileName": "Images/state 31.png"
     },
     {
-        "iDurationLimitSeconds": 10,
+        "iDurationLimitSeconds": 30,
         "iNextStateIndex": 33,
         "iStateIndex": 32,
         "m_strFirstSentence": "Fifth question: How long after surgery must you keep water out of your eyes, and avoid swimming or strenuous exercise?",

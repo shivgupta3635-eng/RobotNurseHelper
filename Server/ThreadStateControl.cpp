@@ -281,15 +281,16 @@ void ThreadStateControl::run()
 
         }  //if(mStates[m_iStateIndex].bInitial)
 
-        if( mStates[m_iStateIndex].sStateType == "SaySomething" || mStates[m_iStateIndex].sStateType == "PlayVideo")   //Robot does not wait for patient's response
-        {
-            if( current_time - mStates[m_iStateIndex].m_Start_time > mStates[m_iStateIndex].m_secDurationLimit)
-            {
-                mbReadyToChangeState = true;
-                mbOldStateComplete = true;
-            }
-        }
-        else if( mStates[m_iStateIndex].sStateType == "Conversation" || mStates[m_iStateIndex].sStateType == "RobotAskPatientAnswer")
+        bool bQuestionSaySomethingState =
+            (mStates[m_iStateIndex].sStateType == "SaySomething" &&
+             mStates[m_iStateIndex].v_str_KeyWordMoveToNextState.size() > 0);
+
+        bool bConversationResponseState =
+            mStates[m_iStateIndex].sStateType == "Conversation" ||
+            mStates[m_iStateIndex].sStateType == "RobotAskPatientAnswer" ||
+            bQuestionSaySomethingState;
+
+        if( bConversationResponseState )
         {
             if( mbWaitForTTSComplete)
             {
@@ -403,10 +404,28 @@ void ThreadStateControl::run()
                         //get patient's name
                         if( mStates[m_iStateIndex].m_strStateName == "Greeting 1 and ask name" )
                         {
-                            msPatientName = GetPatientName(WhisperResult.sOutput);
-                            cout << "Extracted patient name: " << msPatientName << endl;
+                            std::string extractedName = GetPatientName(WhisperResult.sOutput);
+                            if( !extractedName.empty() )
+                            {
+                                msPatientName = extractedName;
+                                cout << "Extracted patient name: " << msPatientName << endl;
+                                mbReadyToChangeState = true;
+                                mbOldStateComplete = true;
+                            }
+                            else
+                            {
+                                cout << "Name not recognized for state 'Greeting 1 and ask name': " << WhisperResult.sOutput << endl;
+                                // Do not let the greeting question become a free-form LLM conversation.
+                                // Keep the state alive and wait for a name-bearing answer.
+                                mbReadyToChangeState = false;
+                                mbOldStateComplete = false;
+                            }
                         }
 
+                        // A fresh Whisper result is processed exactly once here.
+                        // Clear the latest result so the next control-loop iteration does not
+                        // feed the same STT transcript back as a new patient answer.
+                        mpThreadWhisper->ClearLatestResult();
 
                         if( mStates[m_iStateIndex].v_str_KeyWordMoveToNextState.size() > 0)
                         {
@@ -504,10 +523,21 @@ void ThreadStateControl::run()
                 }
             }
         }
-        else //neither StateAndListen nor Conversation
+        else
         {
-            //unknown state type
-            cout << "Unknown state type: " << mStates[m_iStateIndex].sStateType << endl;
+            if( mStates[m_iStateIndex].sStateType == "SaySomething" || mStates[m_iStateIndex].sStateType == "PlayVideo")
+            {
+                if( current_time - mStates[m_iStateIndex].m_Start_time > mStates[m_iStateIndex].m_secDurationLimit)
+                {
+                    mbReadyToChangeState = true;
+                    mbOldStateComplete = true;
+                }
+            }
+            else
+            {
+                //unknown state type
+                cout << "Unknown state type: " << mStates[m_iStateIndex].sStateType << endl;
+            }
         }
 
         if( mbReadyToChangeState && mbOldStateComplete)
@@ -583,29 +613,185 @@ void ThreadStateControl::SetIntialStateIndex(int N) {
 }
 
 
-string ThreadStateControl::GetPatientName(string input_sentence){
-    ollama::options options;
-    //options["seed"] = 1;      
-    options["seed"] = rand();
-    options["temperature"] = 0.3;
-    options["num_ctx"] = 131072; //number of context tokens, which is the maximum number of tokens the model can handle in a single request
+string ThreadStateControl::GetPatientName(string input_sentence)
+{
+    std::string lower = input_sentence;
+    std::transform(lower.begin(), lower.end(), lower.begin(), [](unsigned char c){ return static_cast<char>(std::tolower(c)); });
 
+    std::string candidate;
+    bool namePhraseFound = false;
 
-    // 建立更嚴謹的 Prompt，要求模型只輸出 JSON 或純名字
-    string prompt = "你是一個機器人助手。請從以下句子中提取說話者的姓名。"
-                    "規則：1.只回傳姓名 2.不要有任何標點或解釋。"
-                    "句子：\"" + input_sentence + "\"";    
-    // 呼叫 Ollama
-    string ModelName = "gemma3:1b";
-    string name = ollama::generate(ModelName, prompt, options);
+    // Check English and Chinese name intro phrases.
+    vector<string> prefixes = {
+        "you can call me ", "my name is ", "i am ", "i'm ", "im ",
+        "this is ", "call me ", "name is ", "i go by ",
+        "您可以叫我", "你可以叫我", "我叫", "叫我", "我是", "稱呼我", "称呼我"
+    };
 
-    // 去除 LLM 可能誤加的空白或換行
-    name.erase(0, name.find_first_not_of(" \n\r\t"));
-    name.erase(name.find_last_not_of(" \n\r\t") + 1);
+    for (const auto& pref : prefixes)
+    {
+        size_t pos = lower.find(pref);
+        if (pos != std::string::npos)
+        {
+            candidate = input_sentence.substr(pos + pref.length());
+            namePhraseFound = true;
+            break;
+        }
+    }
 
-    cout << "Extracted patient name by LLM: " << name << endl;
-    
-    return name;
+    if (!namePhraseFound)
+    {
+        // If no explicit prefix was spoken, check if input_sentence itself is a clean direct name response.
+        string trimmed = input_sentence;
+        trimmed.erase(0, trimmed.find_first_not_of(" \n\r\t"));
+        size_t last = trimmed.find_last_not_of(" \n\r\t");
+        if (last != string::npos) trimmed = trimmed.substr(0, last + 1);
+
+        while (!trimmed.empty() && (trimmed.back() == '.' || trimmed.back() == ',' || trimmed.back() == '!' || trimmed.back() == '?' || trimmed.back() == '"' || trimmed.back() == '\''))
+        {
+            trimmed.pop_back();
+        }
+
+        string lowerTrimmed = trimmed;
+        std::transform(lowerTrimmed.begin(), lowerTrimmed.end(), lowerTrimmed.begin(), [](unsigned char c){ return static_cast<char>(std::tolower(c)); });
+
+        vector<string> stopWords = {
+            "yes", "yeah", "no", "okay", "ok", "ready", "start", "begin", "hello", "hi",
+            "what", "sorry", "pardon", "repeat", "huh", "don't know", "dont know",
+            "好", "不可以", "不能", "不要", "開始", "介绍", "介紹", "不知道"
+        };
+
+        bool isStopWord = false;
+        for (const auto& w : stopWords)
+        {
+            if (lowerTrimmed == w)
+            {
+                isStopWord = true;
+                break;
+            }
+        }
+
+        if (!isStopWord && !trimmed.empty())
+        {
+            candidate = trimmed;
+            namePhraseFound = true;
+        }
+    }
+
+    if (!namePhraseFound)
+    {
+        cout << "No name phrase or valid name response found in transcript for: " << input_sentence << endl;
+        return "";
+    }
+
+    // Clean the candidate.
+    candidate.erase(0, candidate.find_first_not_of(" \n\r\t"));
+    size_t end = candidate.find_last_not_of(" \n\r\t");
+    if (end != string::npos)
+    {
+        candidate = candidate.substr(0, end + 1);
+    }
+
+    while (!candidate.empty() &&
+           (candidate.back() == '.' || candidate.back() == ',' || candidate.back() == '!' || candidate.back() == '?' || candidate.back() == '"' || candidate.back() == '\''))
+    {
+        candidate.pop_back();
+    }
+
+    std::string lowerCandidate = candidate;
+    std::transform(lowerCandidate.begin(), lowerCandidate.end(), lowerCandidate.begin(), [](unsigned char c){ return static_cast<char>(std::tolower(c)); });
+
+    if (lowerCandidate == "yes" || lowerCandidate == "yeah" || lowerCandidate == "no" || lowerCandidate == "okay" || lowerCandidate == "ok" || lowerCandidate == "ready" || lowerCandidate == "start" || lowerCandidate == "begin" || lowerCandidate == "hello" || lowerCandidate == "hi" || lowerCandidate == "what" || lowerCandidate == "sorry")
+    {
+        cout << "Rejecting non-name transcript token as patient name: " << candidate << endl;
+        return "";
+    }
+
+    string extractedName = candidate;
+    if (extractedName.empty())
+    {
+        // LLM fallback with language-aware prompt
+        ollama::options options;
+        options["seed"] = rand();
+        options["temperature"] = 0.3;
+        options["num_ctx"] = 131072;
+
+        string prompt;
+        if (msetting.Language == "English")
+        {
+            prompt = "You are a robot assistant. Please extract the speaker's name from the following sentence. "
+                     "Rules: 1. Output ONLY the name. 2. Do not include any punctuation or extra explanation. "
+                     "Sentence: \"" + input_sentence + "\"";
+        }
+        else
+        {
+            prompt = "你是一個機器人助手。請從以下句子中提取說話者的姓名。"
+                     "規則：1.只回傳姓名 2.不要有任何標點或解釋。"
+                     "句子：\"" + input_sentence + "\"";
+        }
+        string ModelName = "gemma3:1b";
+        extractedName = ollama::generate(ModelName, prompt, options);
+        extractedName.erase(0, extractedName.find_first_not_of(" \n\r\t"));
+        if (extractedName.find_last_not_of(" \n\r\t") != string::npos)
+            extractedName.erase(extractedName.find_last_not_of(" \n\r\t") + 1);
+    }
+
+    // Extract title (salutation) if present in spoken name
+    string lowerName = extractedName;
+    std::transform(lowerName.begin(), lowerName.end(), lowerName.begin(), [](unsigned char c){ return static_cast<char>(std::tolower(c)); });
+
+    if (lowerName.rfind("mr. ", 0) == 0 || lowerName.rfind("mr ", 0) == 0)
+    {
+        msPatientTitle = "Mr.";
+        size_t sp = extractedName.find(' ');
+        if (sp != string::npos) extractedName = extractedName.substr(sp + 1);
+    }
+    else if (lowerName.rfind("ms. ", 0) == 0 || lowerName.rfind("ms ", 0) == 0)
+    {
+        msPatientTitle = "Ms.";
+        size_t sp = extractedName.find(' ');
+        if (sp != string::npos) extractedName = extractedName.substr(sp + 1);
+    }
+    else if (lowerName.rfind("mrs. ", 0) == 0 || lowerName.rfind("mrs ", 0) == 0)
+    {
+        msPatientTitle = "Mrs.";
+        size_t sp = extractedName.find(' ');
+        if (sp != string::npos) extractedName = extractedName.substr(sp + 1);
+    }
+    else if (lowerName.rfind("miss ", 0) == 0)
+    {
+        msPatientTitle = "Miss";
+        size_t sp = extractedName.find(' ');
+        if (sp != string::npos) extractedName = extractedName.substr(sp + 1);
+    }
+    else if (lowerName.rfind("dr. ", 0) == 0 || lowerName.rfind("dr ", 0) == 0)
+    {
+        msPatientTitle = "Dr.";
+        size_t sp = extractedName.find(' ');
+        if (sp != string::npos) extractedName = extractedName.substr(sp + 1);
+    }
+    else if (extractedName.length() > 6 && extractedName.substr(extractedName.length() - 6) == "先生")
+    {
+        msPatientTitle = "先生";
+        extractedName = extractedName.substr(0, extractedName.length() - 6);
+    }
+    else if (extractedName.length() > 6 && extractedName.substr(extractedName.length() - 6) == "小姐")
+    {
+        msPatientTitle = "小姐";
+        extractedName = extractedName.substr(0, extractedName.length() - 6);
+    }
+    else if (extractedName.length() > 6 && extractedName.substr(extractedName.length() - 6) == "女士")
+    {
+        msPatientTitle = "女士";
+        extractedName = extractedName.substr(0, extractedName.length() - 6);
+    }
+
+    extractedName.erase(0, extractedName.find_first_not_of(" \n\r\t"));
+    size_t lastPos = extractedName.find_last_not_of(" \n\r\t");
+    if (lastPos != string::npos) extractedName = extractedName.substr(0, lastPos + 1);
+
+    cout << "Extracted patient name: " << extractedName << " (title: " << msPatientTitle << ")" << endl;
+    return extractedName;
 }
 
 string ThreadStateControl::ConvertMessageHistoryToString(vector<string> message_history)
@@ -632,34 +818,38 @@ string ThreadStateControl::ReplaceVariables(string sentence)
 {
     //This function is used to replace the variables in the sentence with the real values. For example, replace {PatientName} with the real patient name.
     string result = sentence;
-    if( result.find("{PatientName}") != string::npos)
+
+    // Ensure m_mapPatientTitles is populated
+    if (m_mapPatientTitles.empty())
     {
-        result.replace(result.find("{PatientName}"), string("{PatientName}").length(), msPatientName);
+        LoadPatientTitles();
     }
 
-    if( result.find("{PatientTitle}") != string::npos)
+    // Determine or update msPatientTitle if not explicitly set from spoken input
+    string sPatientGender = mpThreadProcessImage ? mpThreadProcessImage->GetPatientGender() : "Unknown";
+    int iPatientAge = mpThreadProcessImage ? mpThreadProcessImage->GetPatientAge() : -1;
+
+    if (msPatientTitle.empty())
     {
-        string sPatientGender = mpThreadProcessImage->GetPatientGender(); //update the patient
-        int iPatientAge = mpThreadProcessImage->GetPatientAge();
-        if( iPatientAge != -1 )
+        if (iPatientAge != -1)
         {
-            if( iPatientAge < 10 )
+            if (iPatientAge < 10)
             {
                 msPatientTitle = m_mapPatientTitles["Child"];
             }
-            else if( iPatientAge < 20 )
+            else if (iPatientAge < 20)
             {
                 msPatientTitle = m_mapPatientTitles["Youth"];
             }
             else
             {
-                if( sPatientGender == "Male" )
+                if (sPatientGender == "Male")
                 {
                     msPatientTitle = m_mapPatientTitles["MaleAdult"];
                 }
-                else if ( sPatientGender == "Female" )
+                else if (sPatientGender == "Female")
                 {
-                    if( iPatientAge < 40 )
+                    if (iPatientAge < 40)
                     {
                         msPatientTitle = m_mapPatientTitles["FemaleYoungAdult"];
                     }
@@ -668,15 +858,54 @@ string ThreadStateControl::ReplaceVariables(string sentence)
                         msPatientTitle = m_mapPatientTitles["FemaleOlderAdult"];
                     }
                 }
-                else
-                {
-                    msPatientTitle = "";
-                }
             }
         }
 
+        // If age is unknown (-1) or title is still empty, check gender
+        if (msPatientTitle.empty())
+        {
+            if (sPatientGender == "Male")
+            {
+                msPatientTitle = m_mapPatientTitles["MaleAdult"];
+            }
+            else if (sPatientGender == "Female")
+            {
+                msPatientTitle = m_mapPatientTitles["FemaleOlderAdult"];
+            }
+        }
+
+        // Fallback default if title is still empty when {PatientTitle} is requested
+        if (msPatientTitle.empty())
+        {
+            if (msetting.Language == "English")
+            {
+                msPatientTitle = "Mr.";
+            }
+            else
+            {
+                msPatientTitle = "先生";
+            }
+        }
+    }
+
+    if (result.find("{PatientName}") != string::npos)
+    {
+        result.replace(result.find("{PatientName}"), string("{PatientName}").length(), msPatientName);
+    }
+
+    if (result.find("{PatientTitle}") != string::npos)
+    {
         result.replace(result.find("{PatientTitle}"), string("{PatientTitle}").length(), msPatientTitle);
     }
+
+    // Clean up double spaces resulting from empty title or variable replacement
+    size_t doubleSpace = result.find("  ");
+    while (doubleSpace != string::npos)
+    {
+        result.replace(doubleSpace, 2, " ");
+        doubleSpace = result.find("  ");
+    }
+
     return result;
 }
 
@@ -689,6 +918,8 @@ void ThreadStateControl::Restart()
 {
     m_iStateIndex = 0;
     mbStopInterrupted = true;
+    msPatientName = "";
+    msPatientTitle = "";
     for( auto& state : mStates)
     {
         state.bInitial = true;
