@@ -336,7 +336,7 @@
         "sImageFileName": ""
     },
     {
-        "iDurationLimitSeconds": 99,
+        "iDurationLimitSeconds": 181,
         "iNextStateIndex": 17,
         "iStateIndex": 16,
         "m_strFirstSentence": "",
@@ -577,7 +577,7 @@
         "sImageFileName": "eng_images/state 25.png"
     },
     {
-        "iDurationLimitSeconds": 129,
+        "iDurationLimitSeconds": 235,
         "iNextStateIndex": 27,
         "iStateIndex": 26,
         "m_strFirstSentence": "",

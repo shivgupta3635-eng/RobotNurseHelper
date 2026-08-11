@@ -113,6 +113,55 @@ std::string ThreadStateControl::GetLocalizedImagePath(const std::string &origina
     return originalPath;
 }
 
+std::string ThreadStateControl::GetLocalizedVideoPath(const std::string &originalPath)
+{
+    namespace fs = std::filesystem;
+    fs::path p(originalPath);
+    std::string filename = p.filename().string();
+
+    std::string baseName = filename;
+    if (baseName.rfind("Eng_", 0) == 0) {
+        baseName = baseName.substr(4);
+    } else if (baseName.rfind("eng_", 0) == 0) {
+        baseName = baseName.substr(4);
+    }
+
+    if (msetting.Language == "English") {
+        std::vector<fs::path> candidates = {
+            fs::path("Eng_videos") / ("Eng_" + baseName),
+            fs::path("Eng_videos") / ("eng_" + baseName),
+            fs::path("Eng_videos") / baseName,
+            fs::path("eng_videos") / ("Eng_" + baseName),
+            fs::path("eng_videos") / ("eng_" + baseName),
+            fs::path("eng_videos") / baseName,
+            fs::path("Videos") / ("Eng_" + baseName),
+            fs::path("Videos") / ("eng_" + baseName),
+            fs::path(originalPath),
+            fs::path("Videos") / baseName
+        };
+
+        for (const auto& cand : candidates) {
+            if (!cand.empty() && fs::exists(cand)) {
+                return cand.string();
+            }
+        }
+    } else {
+        std::vector<fs::path> candidates = {
+            fs::path("Videos") / baseName,
+            fs::path("videos") / baseName,
+            fs::path(originalPath)
+        };
+
+        for (const auto& cand : candidates) {
+            if (!cand.empty() && fs::exists(cand)) {
+                return cand.string();
+            }
+        }
+    }
+
+    return originalPath;
+}
+
 void ThreadStateControl::NextState()
 {
     m_iStateIndex++;
@@ -162,7 +211,10 @@ void ThreadStateControl::run()
                 if( s.find("PlayVideo:") != string::npos )
                 {
                     size_t pos = s.find(":");
-                    emit playVideoRequest(s.substr(pos + 1).c_str());
+                    std::string rawVideoPath = s.substr(pos + 1);
+                    std::string localizedVideoPath = GetLocalizedVideoPath(rawVideoPath);
+                    cout << "[ThreadStateControl] Language=" << msetting.Language << " selected video: " << localizedVideoPath << endl;
+                    emit playVideoRequest(localizedVideoPath.c_str());
                     str_voice_source = "Video";
                 }
 
